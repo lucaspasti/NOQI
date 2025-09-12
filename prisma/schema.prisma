@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,9 +8,117 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
+  id              String    @id @default(cuid())
+  email           String    @unique
+  username        String   @unique
+  passwordHash    String
+  role            Role      @default(USER)
+  isActive        Boolean   @default(true)
+  emailVerifiedAt DateTime?
+
+  // Relacionamentos
+  refreshTokens RefreshToken[]
+  sessions      Session[]
+  // (Opcional) contas OAuth
+  oauthAccounts OAuthAccount[]
+
+  // Auditoria
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  PasswordResetToken     PasswordResetToken[]
+  EmailVerificationToken EmailVerificationToken[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model RefreshToken {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token       String  @unique // valor opaco/aleatório (não use o JWT aqui)
+  jti         String  @unique // id lógico do token (útil p/ trilha/rotação)
+  fingerprint String? // hash do device/UA/IP (opcional)
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([jti])
+}
+
+model Session {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  userAgent  String?
+  ip         String?
+  lastUsedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId])
+  @@index([lastUsedAt])
+}
+
+model PasswordResetToken {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String    @unique // valor opaco/aleatório
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// (Opcional) se você também aceitar login social (OAuth)
+model OAuthAccount {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider          String // "google" | "github" | ...
+  providerAccountId String // id no provedor
+  email             String? // e-mail retornado pelo provedor (se houver)
+
+  accessToken  String? // se precisar chamar APIs do provedor
+  refreshToken String?
+  expiresAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
 }
